@@ -135,7 +135,9 @@ void D3D12Screen::display(const TracedResult& trResult)
 	mSwapChain.present();
 
 	mFence.waitCommandQueue(mCmdQueue);
+
 }
+
 
 void D3D12Screen::onSizeChanged(uint width, uint height)
 {

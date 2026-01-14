@@ -26,6 +26,7 @@ NextAlignedLine
 	uint accumulatedFrames;
 	uint numSamplesPerFrame;
 	uint maxPathLength;
+	uint numEmissiveTriangles;
 };
 
 
@@ -33,6 +34,7 @@ NextAlignedLine
 struct ObjectContants
 {
 	uint objectIdx;
+
 };
 
 static const uint xxx = sizeof(GloabalContants);
@@ -59,6 +61,8 @@ class DXRPathTracer : public IGRTTracer
 	static const DXGI_FORMAT			tracerOutFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	static const uint					recordSize = hitGroupRecordSize;
 
+	uint								mNumRayTypes;
+	
 	ID3D12Device5*						mDevice;
 	ID3D12CommandQueue*					mCmdQueue;
 	ID3D12GraphicsCommandList4*			mCmdList;
@@ -89,10 +93,11 @@ class DXRPathTracer : public IGRTTracer
 	DefaultBuffer						mSceneObjectBuffer;
 	DefaultBuffer						mVertexBuffer;
 	DefaultBuffer						mTridexBuffer;
-	DefaultBuffer						mCdfBuffer;			// Now not use.
-	DefaultBuffer						mTransformBuffer;	// Now not use.
-	DefaultBuffer						mMaterialBuffer;	// Now not use.
-	
+	DefaultBuffer						mCdfBuffer;			
+	DefaultBuffer						mTransformBuffer;	// Now not use.		t5
+	DefaultBuffer						mMaterialBuffer;	
+	DefaultBuffer						mStaticLightBuffer;	
+
 	ShaderTable							mShaderTable;
 	void setupShaderTable();
 

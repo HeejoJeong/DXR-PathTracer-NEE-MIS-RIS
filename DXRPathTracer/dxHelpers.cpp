@@ -906,8 +906,6 @@ void dxShader::load(LPCWSTR hlslFile, const char* entryFtn, const char* target)
 }
 
 
-
-
 //---------------------From here, DXR related helper---------------------------------//
 
 ID3D12Resource* createAS(

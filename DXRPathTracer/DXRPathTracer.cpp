@@ -7,16 +7,18 @@
 namespace DescriptorID {
 	enum {
 		// First RootParameter
-		outUAV = 0,	
-		
+		outUAV = 0,
+
 		// Third RootParameter
 		sceneObjectBuff = 1,
-		vertexBuff = 2,		
+		vertexBuff = 2,
 		tridexBuff = 3,
 		materialBuff = 4,
 		cdfBuff = 5,
 		transformBuff = 6,
-		
+
+		staticLightBuff = 7,
+
 		// Not used since we use RootPointer instead of RootTable
 		accelerationStructure = 10,
 
@@ -96,7 +98,7 @@ void DXRPathTracer::declareRootSignatures()
 	mGlobalRS[RootParamID::pointerForAccelerationStructure] 
 		= new RootPointer("(100) t0");					// It will be bound to mAccelerationStructure that is not initialized yet.
 	mGlobalRS[RootParamID::tableForGeometryInputs] 
-		= new RootTable("(0) t0-t5", mSrvUavHeap[DescriptorID::sceneObjectBuff].getGpuHandle());
+		= new RootTable("(0) t0-t6", mSrvUavHeap[DescriptorID::sceneObjectBuff].getGpuHandle());
 	mGlobalRS[RootParamID::pointerForGlobalConstants] 
 		= new RootPointer("b0");						// It will be bound to mGlobalConstantsBuffer that is not initialized yet.
 	mGlobalRS.build();
@@ -110,14 +112,26 @@ void DXRPathTracer::declareRootSignatures()
 
 void DXRPathTracer::buildRaytracingPipeline()
 {
-	dxrLib.load(L"DXRShader.cso");
+	//dxrLib.load(L"DXRShader1.cso");
+	//mNumRayTypes = 1;
+	//mRtPipeline.setDXRLib(&dxrLib);
+	//mRtPipeline.setGlobalRootSignature(&mGlobalRS);
+	//mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
+	//mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
+	//mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));// L"hitGpShadow"
+	//mRtPipeline.setMaxPayloadSize(sizeof(float) * 20);
+	//mRtPipeline.setMaxRayDepth(2);
+	//mRtPipeline.build();
 
+	dxrLib.load(L"DXRShader_nee.cso");
+	mNumRayTypes = 2;
 	mRtPipeline.setDXRLib(&dxrLib);
 	mRtPipeline.setGlobalRootSignature(&mGlobalRS);
 	mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
 	mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
-	mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));
-	mRtPipeline.setMaxPayloadSize(sizeof(float) * 16);
+	mRtPipeline.addHitGroup(HitGroup(L"hitGpShadow", L"closestHitShadow", nullptr));
+	mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));// L"hitGpShadow"
+	mRtPipeline.setMaxPayloadSize(sizeof(float) *20);
 	mRtPipeline.setMaxRayDepth(2);
 	mRtPipeline.build();
 }
@@ -131,7 +145,7 @@ void DXRPathTracer::initializeApplication()
 	mGlobalConstants.rayTmin = 0.001f;  // 1mm
 	mGlobalConstants.accumulatedFrames = 0;
 	mGlobalConstants.numSamplesPerFrame = 32;
-	mGlobalConstants.maxPathLength = 6;
+	mGlobalConstants.maxPathLength = 5;
 	mGlobalConstants.backgroundLight = float3(.0f);
 
 	mGlobalConstantsBuffer.create(sizeof(GloabalContants));
@@ -186,7 +200,7 @@ void DXRPathTracer::update(const InputEngine& input)
 	if (camera.notifyChanged())
 	{
 		mGlobalConstants.cameraPos = camera.getCameraPos();
-		mGlobalConstants.cameraX = camera.getCameraX();
+		mGlobalConstants.cameraX = camera.getCameraX();	
 		mGlobalConstants.cameraY = camera.getCameraY();
 		mGlobalConstants.cameraZ = camera.getCameraZ();
 		mGlobalConstants.cameraAspect = camera.getCameraAspect();
@@ -214,7 +228,7 @@ TracedResult DXRPathTracer::shootRays()
 		desc.Depth = 1;
 		desc.RayGenerationShaderRecord = mShaderTable.getRecord(0);
 		desc.MissShaderTable = mShaderTable.getSubTable(1, 2);
-		desc.HitGroupTable = mShaderTable.getSubTable(3, scene->numObjects());
+		desc.HitGroupTable = mShaderTable.getSubTable(3, scene->numObjects() * mNumRayTypes);
 	}
 	mCmdList->DispatchRays(&desc);
 
@@ -245,8 +259,11 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	const Array<Transform> trmArr = scene->getTransformArray();
 	const Array<float> cdfArr = scene->getCdfArray();
 	const Array<Material> mtlArr = scene->getMaterialArray();
+	const Array<StaticEmissiveTriangle> staticLightArr = scene->getStaticLightArray();				
 
-	assert(cdfArr.size() == 0 || cdfArr.size() == tdxArr.size());
+	//assert(cdfArr.size() == 0 || cdfArr.size() == tdxArr.size());
+	if (cdfArr.size() != 0 && cdfArr.size() != tdxArr.size())
+		printf("WARNING: cdfArr is defined for emissive triangles. This framework originally assumes per-triangle CDF.\n");
 
 	uint64 vtxBuffSize = vtxArr.size() * sizeof(Vertex);
 	uint64 tdxBuffSize = tdxArr.size() * sizeof(Tridex);
@@ -254,8 +271,9 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	uint64 cdfBuffSize = cdfArr.size() * sizeof(float);
 	uint64 mtlBuffSize = mtlArr.size() * sizeof(Material);
 	uint64 objBuffSize = numObjs * sizeof(GPUSceneObject);
+	uint64 staticLightBuffSize = staticLightArr.size() * sizeof(StaticEmissiveTriangle);
 
-	UploadBuffer uploader(vtxBuffSize + tdxBuffSize + trmBuffSize + cdfBuffSize + mtlBuffSize + objBuffSize);
+	UploadBuffer uploader(vtxBuffSize + tdxBuffSize + trmBuffSize + cdfBuffSize + mtlBuffSize + objBuffSize + staticLightBuffSize);
 	uint64 uploaderOffset = 0;
 
 	auto initBuffer = [&](DefaultBuffer& buff, uint64 buffSize, void* srcData) {
@@ -272,6 +290,7 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	initBuffer(mTransformBuffer, trmBuffSize, (void*) trmArr.data());
 	initBuffer(mCdfBuffer,		 cdfBuffSize, (void*) cdfArr.data());
 	initBuffer(mMaterialBuffer,	 mtlBuffSize, (void*) mtlArr.data());
+	initBuffer(mStaticLightBuffer,	 staticLightBuffSize, (void*) staticLightArr.data());
 
 	mSceneObjectBuffer.create(objBuffSize);
 	GPUSceneObject* copyDst = (GPUSceneObject*) ((uint8*) uploader.map() + uploaderOffset);
@@ -283,7 +302,8 @@ void DXRPathTracer::setupScene(const Scene* scene)
 		gpuObj.vertexOffset = obj.vertexOffset;
 		gpuObj.tridexOffset = obj.tridexOffset;
 		gpuObj.numTridices = obj.numTridices;
-		gpuObj.objectArea = obj.meshArea * obj.scale * obj.scale;
+		gpuObj.cdfOffset = obj.cdfOffset;
+		//gpuObj.objectArea = obj.meshArea * obj.scale * obj.scale;
 		gpuObj.twoSided = obj.twoSided;
 		gpuObj.materialIdx = obj.materialIdx;
 		gpuObj.backMaterialIdx = obj.backMaterialIdx;
@@ -340,6 +360,26 @@ void DXRPathTracer::setupScene(const Scene* scene)
 		srvDesc.Buffer.NumElements = mtlArr.size();
 	}
 	mSrvUavHeap[DescriptorID::materialBuff].assignSRV(mMaterialBuffer, &srvDesc);
+	
+	{
+		srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.StructureByteStride = 0;
+		srvDesc.Buffer.NumElements = cdfArr.size();
+	}
+	mSrvUavHeap[DescriptorID::cdfBuff].assignSRV(mCdfBuffer, &srvDesc);
+
+	{
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.StructureByteStride = sizeof(StaticEmissiveTriangle);
+		srvDesc.Buffer.NumElements = staticLightArr.size();
+	}
+	mSrvUavHeap[DescriptorID::staticLightBuff].assignSRV(mStaticLightBuffer, &srvDesc);
+
+	mGlobalConstants.numEmissiveTriangles = cdfArr.size();
 
 	setupShaderTable();
 
@@ -347,6 +387,8 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	
 	* (RootPointer*) mGlobalRS[RootParamID::pointerForAccelerationStructure]
 		= mAccelerationStructure.getGpuAddress();
+
+
 }
 
 void DXRPathTracer::setupShaderTable()
@@ -357,8 +399,13 @@ void DXRPathTracer::setupShaderTable()
 	ShaderIdentifier* hitGpID = mRtPipeline.getIdentifier(L"hitGp");
 	ShaderIdentifier* hitGpGlassID = mRtPipeline.getIdentifier(L"hitGpGlass");
 
+	ShaderIdentifier* hitGpshadowID = nullptr;
+	if (mNumRayTypes == 2) // use shadow ray
+		hitGpshadowID = mRtPipeline.getIdentifier(L"hitGpShadow");
+
 	uint numObjs = scene->numObjects();
-	mShaderTable.create(recordSize, numObjs + 3);
+	
+	mShaderTable.create(recordSize, mNumRayTypes * numObjs + 3);	// radiance & shadow ray 
 
 	HitGroupRecord* table = (HitGroupRecord*) mShaderTable.map();
 	table[0].shaderIdentifier = *rayGenID;
@@ -366,14 +413,31 @@ void DXRPathTracer::setupShaderTable()
 	table[2].shaderIdentifier = *missShadowID;
 
 	auto& mtlArr = scene->getMaterialArray();
+
 	for (uint i = 0; i < numObjs; ++i)
 	{
-		if(mtlArr[ scene->getObject(i).materialIdx ].type == Glass)
-			table[3 + i].shaderIdentifier = *hitGpGlassID;
-		else
-			table[3 + i].shaderIdentifier = *hitGpID;
+		// we can further simplify this code...
+		if (mNumRayTypes == 1) {
+			if (mtlArr[scene->getObject(i).materialIdx].type == Glass)
+				table[3 + i].shaderIdentifier = *hitGpGlassID;
+			else
+				table[3 + i].shaderIdentifier = *hitGpID;
+			table[3 + i].objConsts.objectIdx = i;
+		}
+		else if (mNumRayTypes == 2) {
+			if (mtlArr[scene->getObject(i).materialIdx].type == Glass)
+				table[3 + 2 * i].shaderIdentifier = *hitGpGlassID;
+			else
+				table[3 + 2 * i].shaderIdentifier = *hitGpID;
 
-		table[3 + i].objConsts.objectIdx = i;
+			table[3 + 2 * i + 1].shaderIdentifier = *hitGpshadowID;
+
+			table[3 + 2 * i].objConsts.objectIdx = i;
+			//table[3 + 2 * i + 1].objConsts.objectIdx = i;
+		}
+		else
+			assert(mNumRayTypes == 1 || mNumRayTypes == 2);
+
 	}
 
 	mShaderTable.uploadData(mCmdList);
@@ -398,9 +462,12 @@ void DXRPathTracer::buildAccelerationStructure()
 	
 		transformArr[objIdx] = obj.modelMatrix;
 	}
-	
+
+	// TODO: Assume each BLAS contains only one D3D12_RAYTRACING_GEOMETRY_DESC.
+	// Supporting sub-materials or multiple geometries requires handling of InstanceContributionToHitGroupIndex.
 	mAccelerationStructure.build(mCmdList, gpuMeshArr, transformArr, 
-		sizeof(Vertex), 1, buildMode, buildFlags);
+		sizeof(Vertex), mNumRayTypes, buildMode, buildFlags);
+	
 
 	ThrowFailedHR(mCmdList->Close());
 	ID3D12CommandList* cmdLists[] = { mCmdList };

@@ -92,6 +92,9 @@
     <ClInclude Include="Camera.h">
       <Filter>소스 파일\IGRT Framework</Filter>
     </ClInclude>
+    <ClInclude Include="stb_image_write.h">
+      <Filter>소스 파일\UTIL</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dxHelpers.cpp">
@@ -124,6 +127,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="sampling.hlsli">
+      <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
+    </None>
+    <None Include="DXRShader_nee.hlsl">
+      <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
+    </None>
+    <None Include="DXRShader1.hlsl">
       <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
     </None>
   </ItemGroup>

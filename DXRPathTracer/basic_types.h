@@ -151,3 +151,12 @@ struct Transform
 		return Transform(1.0f);
 	}
 };
+
+
+struct StaticEmissiveTriangle
+{
+	float3 emittance;
+	uint objIdx;
+	uint triIdx;
+	float area;
+};

@@ -5,8 +5,12 @@
 #include "Input.h"
 #include "timer.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 HWND createWindow(const char* winTitle, uint width, uint height);
+void exportIMG(uint frame, const TracedResult& trResult);
+
 
 IGRTTracer* tracer;
 IGRTScreen* screen;
@@ -25,10 +29,12 @@ int main()
 
 	SceneLoader sceneLoader;
 	//Scene* scene = sceneLoader.push_testScene1();
+	//Scene* scene = sceneLoader.push_testScene2();
 	Scene* scene = sceneLoader.push_hyperionTestScene();
 	tracer->setupScene(scene);
 	
 	double fps, old_fps = 0;
+	uint cur_frame = 0;
 	while (IsWindow(hwnd))
 	{
 		input.update();
@@ -38,6 +44,8 @@ int main()
 			tracer->update(input);
 			TracedResult trResult = tracer->shootRays();
 			screen->display(trResult);
+
+			exportIMG(cur_frame++, trResult);
 		}
 
 		MSG msg;
@@ -87,6 +95,116 @@ HWND createWindow(const char* winTitle, uint width, uint height)
 		nullptr);
 
 	return hWnd;
+}
+
+
+void exportIMG(uint frame, const TracedResult& trResult) {
+	if (frame != 512 - 1)
+		return;
+
+	printf("EXPORT at 512 frame, i.e. 16k spp \n");
+
+	struct float4 { float x, y, z, w; };
+
+	float4* pixels = reinterpret_cast<float4*>(trResult.data);
+
+	uint nanInfCount = 0;
+	uint firstX = 0, firstY = 0, firstIdx = 0;
+	float4 firstVal = {};
+
+	for (uint y = 0; y < trResult.height; ++y)
+	{
+		for (uint x = 0; x < trResult.width; ++x)
+		{
+			uint idx = y * trResult.width + x;
+			const float4& p = pixels[idx];
+
+			//printf("%f, %f, %f, %f \n ", p.x, p.y, p.z, p.w);
+
+			if (!std::isfinite(p.x) ||
+				!std::isfinite(p.y) ||
+				!std::isfinite(p.z) ||
+				!std::isfinite(p.w))
+			{
+				if (nanInfCount == 0)
+				{
+					firstX = x;
+					firstY = y;
+					firstIdx = idx;
+					firstVal = p;
+				}
+				++nanInfCount;
+			}
+		}
+	}
+
+	if (nanInfCount == 0)
+	{
+		printf("No NaN / INF found in tracer output.\n");
+	}
+	else
+	{
+		printf(
+			"NaN/INF found: %u pixels. First at (%u,%u) idx=%u : (%f %f %f %f)\n",
+			nanInfCount,
+			firstX, firstY, firstIdx,
+			firstVal.x, firstVal.y, firstVal.z, firstVal.w
+		);
+		throw Error("NaN/INF found.");
+	}
+
+	bool allZero = true;
+
+	for (int i = 0; i < trResult.width * trResult.height; ++i)
+	{
+		if (pixels[i].x != 0.0f ||
+			pixels[i].y != 0.0f ||
+			pixels[i].z != 0.0f)
+		{
+			allZero = false;
+			break;
+		}
+	}
+
+	if (allZero)
+		printf("All pixels are zero.\n");
+
+
+	const int width = trResult.width;
+	const int height = trResult.height;
+
+	float exposure = 1.0f;
+	float gamma = 2.2f;
+
+	Array<unsigned char> ldr(width * height * 4);
+
+	auto toByte = [&](float v)
+		{
+			v *= exposure;
+			v = max(0.0f, v);
+			v = powf(v, 1.0f / gamma);
+			return (unsigned char)(min(v, 1.0f) * 255.0f + 0.5f);
+		};
+
+	for (int y = 0; y < height; ++y)
+	{
+		for (int x = 0; x < width; ++x)
+		{
+			int i = y * width + x;
+			int o = i * 4;
+
+			const float4& p = pixels[i];
+
+			ldr[o + 0] = toByte(p.x);
+			ldr[o + 1] = toByte(p.y);
+			ldr[o + 2] = toByte(p.z);
+			ldr[o + 3] = 255; // alpha
+		}
+	}
+
+	const char* filename = "res.png";
+
+	stbi_write_png(filename, width, height, 4, ldr.data(), width * 4);
 }
 
 LRESULT CALLBACK msgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)

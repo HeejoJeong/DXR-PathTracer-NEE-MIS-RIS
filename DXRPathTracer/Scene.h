@@ -7,9 +7,10 @@ struct GPUSceneObject
 {
 	uint vertexOffset;
 	uint tridexOffset;
+	uint cdfOffset;
 	uint numTridices;
 
-	float objectArea;	// objectArea = meshArea * objectScale * objectScale
+	//float objectArea;	// objectArea = meshArea * objectScale * objectScale
 	
 	uint twoSided;
 	uint materialIdx;
@@ -24,7 +25,8 @@ struct GPUSceneObject
 struct SceneObject
 {	
 	uint vertexOffset;
-	uint tridexOffset;	
+	uint tridexOffset;
+	uint cdfOffset = uint(-1);
 	uint numVertices;
 	uint numTridices;
 
@@ -53,6 +55,7 @@ class Scene
 	Array<float>		cdfArr;
 	Array<Transform>	trmArr;
 	Array<Material>		mtlArr;
+	Array<StaticEmissiveTriangle>		staticLightArr;
 	
 	friend class SceneLoader;
 
@@ -64,12 +67,14 @@ public:
 		cdfArr.clear();
 		trmArr.clear();
 		mtlArr.clear();
+		staticLightArr.clear();
 	}
-	const Array<Vertex>& getVertexArray() const			{ return vtxArr; }
-	const Array<Tridex>& getTridexArray() const			{ return tdxArr; }
-	const Array<float >& getCdfArray() const			{ return cdfArr; }
-	const Array<Transform>& getTransformArray() const	{ return trmArr; }
-	const Array<Material>& getMaterialArray() const		{ return mtlArr; }
-	const SceneObject& getObject(uint i) const			{ return objArr[i]; }
-	uint numObjects() const								{ return objArr.size(); }
+	const Array<Vertex>& getVertexArray() const								{ return vtxArr; }
+	const Array<Tridex>& getTridexArray() const								{ return tdxArr; }
+	const Array<float>& getCdfArray() const								{ return cdfArr; }
+	const Array<Transform>& getTransformArray() const						{ return trmArr; }
+	const Array<Material>& getMaterialArray() const							{ return mtlArr; }
+	const Array<StaticEmissiveTriangle>& getStaticLightArray() const		{ return staticLightArr; }
+	const SceneObject& getObject(uint i) const								{ return objArr[i]; }
+	uint numObjects() const													{ return objArr.size(); }
 };

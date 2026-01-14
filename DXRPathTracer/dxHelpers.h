@@ -798,7 +798,10 @@ class RaytracingPipeline
 	Array<LocalRootSignature> localRSArr;
 	uint maxPayloadSize = 0;
 	uint maxAttributeSize = 8;
-	uint maxRayDepth = 2;
+	uint maxRayDepth = 2; 
+	// TraceRay recursion depth:
+	// 1 for primary path tracing (explicit while-loop),
+	// +1 reserved for shadow rays used in NEE.
 	
 public:
 	~RaytracingPipeline() { destroy(); }
