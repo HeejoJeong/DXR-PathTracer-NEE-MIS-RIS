@@ -35,7 +35,7 @@ struct GPUSceneObject
 	uint twoSided;
 	uint materialIdx;
 	uint backMaterialIdx;
-	//Material material;
+	//Material material;	
 	//float3 emittance;
 	row_major float4x4 modelMatrix;
 };
@@ -47,12 +47,15 @@ struct StaticEmissiveTriangle {
 	float area;
 };
 
-StructuredBuffer<GPUSceneObject> objectBuffer			: register(t0);
-StructuredBuffer<Vertex> vertexBuffer					: register(t1);
-Buffer<uint3> tridexBuffer								: register(t2);				//ByteAddressBuffer IndexBuffer : register(t2);
-StructuredBuffer<Material> materialBuffer				: register(t3);
-Buffer<float> cdfBuff									: register(t4);
+StructuredBuffer<GPUSceneObject> objectBuffer					: register(t0);
+StructuredBuffer<Vertex> vertexBuffer							: register(t1);
+Buffer<uint3> tridexBuffer										: register(t2);				//ByteAddressBuffer IndexBuffer : register(t2);
+StructuredBuffer<Material> materialBuffer						: register(t3);
+Buffer<float> cdfBuff											: register(t4);				// unnormalzied
 StructuredBuffer<StaticEmissiveTriangle> staticLightBuffer		: register(t6);
+
+Buffer<float> probBuffer										: register(t7);				// prob to use Alias
+Buffer<uint> aliasBuffer										: register(t8);
 
 
 cbuffer GLOBAL_CONSTANTS : register(b0)
@@ -348,7 +351,7 @@ float3 evalBRDF(in float3 shadowRayDir, in float3 surfaceNormal, in float3 baseD
 	return brdfEval;
 }
 
-void selectLight(out uint cidx, out float lightSelectionProb, inout float xi) {
+void selectLight_binarySearch(out uint cidx, out float lightSelectionProb, inout float xi) {
 
 	GPUSceneObject obj = objectBuffer[objIdx];
 
@@ -390,13 +393,13 @@ void selectLight(out uint cidx, out float lightSelectionProb, inout float xi) {
 
 		if (u >= cdfPrevExcluded)
 			u += rangeExcluded;
-		
+
 		//if (u < cdfPrev)
 		//	u = u;
 		//else
 		//	u = u + wExcluded;
 
-		while (left < right){
+		while (left < right) {
 			uint mid = (left + right) >> 1;
 
 			if (u <= cdfBuff[mid])
@@ -411,6 +414,52 @@ void selectLight(out uint cidx, out float lightSelectionProb, inout float xi) {
 
 		xi = (u - cdfPrev) / range;
 		cidx = left;
+	}
+
+	return;
+}
+
+
+void selectLight(out uint cidx, out float lightSelectionProb, inout RayPayload payload) {
+	//Alias Method
+
+	GPUSceneObject obj = objectBuffer[objIdx];
+
+	uint numEle = numEmissiveTriangles;
+
+	if (obj.cdfOffset == uint(-1)) {							// The shadow ray starts from non-emissive surface.
+		float totalPower = cdfBuff[numEle - 1];
+
+		uint col = uint(rnd(payload.seed) * numEle);
+
+		if (rnd(payload.seed) >= probBuffer[col])
+			col = aliasBuffer[col];
+
+		float cdfPrev = (col == 0) ? 0.0f : cdfBuff[col - 1];
+		float range = cdfBuff[col] - cdfPrev;
+		lightSelectionProb = range / totalPower;
+
+		cidx = col;
+	}
+	else {														// The shadow ray starts from emissive surface.
+		uint excluded = obj.cdfOffset + PrimitiveIndex();
+
+		float cdfPrevExcluded = (excluded > 0) ? cdfBuff[excluded - 1] : 0.0f;
+		float rangeExcluded = cdfBuff[excluded] - cdfPrevExcluded;
+		float totalPower = cdfBuff[numEle - 1] - rangeExcluded;
+		
+		uint col = 0;
+		do{														// rejection
+			col = uint(rnd(payload.seed) * numEle) ;
+			if (rnd(payload.seed) >= probBuffer[col])
+				col = aliasBuffer[col];
+		} while (col == excluded);								
+
+		float cdfPrev = (col == 0) ? 0.0f : cdfBuff[col - 1];
+		float range = cdfBuff[col] - cdfPrev;
+		lightSelectionProb = range / totalPower;
+
+		cidx = col;
 	}
 
 	return;
@@ -451,11 +500,12 @@ float3 evalDirectLight(in float3 surfaceNormal, in float3 baseDir, in uint mater
 
 	uint cidx;
 	float lightSelectionProb;
-	selectLight(cidx, lightSelectionProb, xi1);
-
+	selectLight(cidx, lightSelectionProb, payload);
+	//selectLight_binarySearch(cidx, lightSelectionProb, xi1);
 
 	StaticEmissiveTriangle light = staticLightBuffer[cidx];
 	float3 Le = light.emittance;
+	float lightArea = light.area;
 
 	float3 lightPoint,lightNormal;
 	sampleLightPoint(lightPoint, lightNormal, xi1, xi2, light);
@@ -476,6 +526,7 @@ float3 evalDirectLight(in float3 surfaceNormal, in float3 baseDir, in uint mater
 	float dist = distance(lightPoint, shadowRayOrigin);
 	float tmax = dist - rayTmin;
 
+
 	ShadowPayload sprd;
 	RayDesc sray = Ray(shadowRayOrigin, shadowRayDir, rayTmin, tmax);
 	TraceRay(scene, 0, ~0, 1, 2, 1, sray, sprd);
@@ -485,7 +536,7 @@ float3 evalDirectLight(in float3 surfaceNormal, in float3 baseDir, in uint mater
 
 	float3 brdf = evalBRDF(shadowRayDir, surfaceNormal, baseDir, materialIdx);
 
-	float areaSampleProb = lightSelectionProb / light.area;
+	float areaSampleProb = lightSelectionProb / lightArea;
 
 
 	return brdf * Le * cos1 * cos2 / (dist * dist * areaSampleProb);	// visibility = 1;

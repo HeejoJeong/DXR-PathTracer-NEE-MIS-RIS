@@ -129,20 +129,20 @@
     <None Include="sampling.hlsli">
       <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
     </None>
-    <None Include="DXRShader_nee.hlsl">
+    <None Include="DXRShader.hlsl">
       <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
     </None>
-    <None Include="DXRShader1.hlsl">
+    <None Include="DXRShader_nee.hlsl">
       <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
     </None>
     <None Include="DXRShader_mis.hlsl">
       <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
     </None>
+    <None Include="DXRShader_ris.hlsl">
+      <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="DXRShader.hlsl">
-      <Filter>소스 파일\DXRPathTracer\HLSL</Filter>
-    </FxCompile>
     <FxCompile Include="D3D12Screen.hlsl">
       <Filter>소스 파일\D3D12Screen\HLSL</Filter>
     </FxCompile>

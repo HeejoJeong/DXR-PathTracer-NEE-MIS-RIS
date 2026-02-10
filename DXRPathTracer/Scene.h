@@ -56,6 +56,8 @@ class Scene
 	Array<Transform>	trmArr;
 	Array<Material>		mtlArr;
 	Array<StaticEmissiveTriangle>		staticLightArr;
+	Array<float>		probArr;
+	Array<uint>			aliasArr;
 	
 	friend class SceneLoader;
 
@@ -68,6 +70,8 @@ public:
 		trmArr.clear();
 		mtlArr.clear();
 		staticLightArr.clear();
+		probArr.clear();
+		aliasArr.clear();
 	}
 	const Array<Vertex>& getVertexArray() const								{ return vtxArr; }
 	const Array<Tridex>& getTridexArray() const								{ return tdxArr; }
@@ -75,6 +79,9 @@ public:
 	const Array<Transform>& getTransformArray() const						{ return trmArr; }
 	const Array<Material>& getMaterialArray() const							{ return mtlArr; }
 	const Array<StaticEmissiveTriangle>& getStaticLightArray() const		{ return staticLightArr; }
+	const Array<float>& getProbArray() const									{ return probArr; }
+	const Array<uint>& getAliasArray() const									{ return aliasArr; }
+
 	const SceneObject& getObject(uint i) const								{ return objArr[i]; }
 	uint numObjects() const													{ return objArr.size(); }
 };

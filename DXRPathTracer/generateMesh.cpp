@@ -161,6 +161,8 @@ Mesh generateSphereMesh(const float3& center, float radius, uint numSegmentsInMe
 	uint M = numSegmentsInMeridian;
 	uint E = numSegmentsInEquator;
 
+	printf("%d, %d", M, E);
+
 	if (M < 2)
 		throw Error("Give number of sides of meridian more than two.");
 

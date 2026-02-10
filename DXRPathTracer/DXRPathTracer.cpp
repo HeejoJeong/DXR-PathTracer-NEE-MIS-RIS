@@ -19,6 +19,9 @@ namespace DescriptorID {
 
 		staticLightBuff = 7,
 
+		probBuff = 8,
+		aliasBuff = 9,
+
 		// Not used since we use RootPointer instead of RootTable
 		accelerationStructure = 10,
 
@@ -42,6 +45,7 @@ namespace HitGroupParamID {
 		numParams = 1
 	};
 }
+
 
 DXRPathTracer::~DXRPathTracer()
 {
@@ -98,7 +102,7 @@ void DXRPathTracer::declareRootSignatures()
 	mGlobalRS[RootParamID::pointerForAccelerationStructure] 
 		= new RootPointer("(100) t0");					// It will be bound to mAccelerationStructure that is not initialized yet.
 	mGlobalRS[RootParamID::tableForGeometryInputs] 
-		= new RootTable("(0) t0-t6", mSrvUavHeap[DescriptorID::sceneObjectBuff].getGpuHandle());
+		= new RootTable("(0) t0-t8", mSrvUavHeap[DescriptorID::sceneObjectBuff].getGpuHandle());
 	mGlobalRS[RootParamID::pointerForGlobalConstants] 
 		= new RootPointer("b0");						// It will be bound to mGlobalConstantsBuffer that is not initialized yet.
 	mGlobalRS.build();
@@ -112,30 +116,42 @@ void DXRPathTracer::declareRootSignatures()
 
 void DXRPathTracer::buildRaytracingPipeline()
 {
+	uint PTType = 2;
 
-	//dxrLib.load(L"DXRShader1.cso");
-	//mNumRayTypes = 1;
-	//mRtPipeline.setDXRLib(&dxrLib);
-	//mRtPipeline.setGlobalRootSignature(&mGlobalRS);
-	//mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
-	//mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
-	//mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));
-	//mRtPipeline.setMaxPayloadSize(sizeof(float) * 20);
-	//mRtPipeline.setMaxRayDepth(2);
-	//mRtPipeline.build();
+	if(!PTType){
+		dxrLib.load(L"DXRShader.cso");
+		mNumRayTypes = 1;
+		mRtPipeline.setDXRLib(&dxrLib);
+		mRtPipeline.setGlobalRootSignature(&mGlobalRS);
+		mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
+		mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
+		mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));
+		mRtPipeline.setMaxPayloadSize(sizeof(float) * 20); 
+		mRtPipeline.setMaxRayDepth(2);
+		mRtPipeline.build();
+	}
+	else{
 
-	//dxrLib.load(L"DXRShader_nee.cso");
-	dxrLib.load(L"DXRShader_mis.cso");
-	mNumRayTypes = 2;	
-	mRtPipeline.setDXRLib(&dxrLib);
-	mRtPipeline.setGlobalRootSignature(&mGlobalRS);
-	mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
-	mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
-	mRtPipeline.addHitGroup(HitGroup(L"hitGpShadow", L"closestHitShadow", nullptr));
-	mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));
-	mRtPipeline.setMaxPayloadSize(sizeof(float) *20);
-	mRtPipeline.setMaxRayDepth(2);
-	mRtPipeline.build();
+		if (PTType == 1)
+			dxrLib.load(L"DXRShader_nee.cso");
+		else if (PTType == 2)
+			dxrLib.load(L"DXRShader_mis.cso");
+		else if (PTType == 3)
+			dxrLib.load(L"DXRShader_ris32.cso");			// num proposal = 32
+		else
+			throw Error("PathTracer Type Error");
+
+		mNumRayTypes = 2;	
+		mRtPipeline.setDXRLib(&dxrLib);
+		mRtPipeline.setGlobalRootSignature(&mGlobalRS);
+		mRtPipeline.addHitGroup(HitGroup(L"hitGp", L"closestHit", nullptr));
+		mRtPipeline.addHitGroup(HitGroup(L"hitGpGlass", L"closestHitGlass", nullptr));
+		mRtPipeline.addHitGroup(HitGroup(L"hitGpShadow", L"closestHitShadow", nullptr));
+		mRtPipeline.addLocalRootSignature(LocalRootSignature(&mHitGroupRS, { L"hitGp", L"hitGpGlass" }));
+		mRtPipeline.setMaxPayloadSize(sizeof(float) *20);
+		mRtPipeline.setMaxRayDepth(2);
+		mRtPipeline.build();
+	}
 
 }
 
@@ -145,6 +161,9 @@ void DXRPathTracer::initializeApplication()
 	camera.setScreenSize((float) tracerOutW, (float) tracerOutH);
 	//camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 10.0f, 0.0f, 0.0f);
 	camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 6.0f, 0.0f, 0.4);
+
+	//camera.initOrbit(float3(0.0f, 0.0f, 15.0f), 10.0f, 0.0f, 0.0f);
+
 
 	mGlobalConstants.rayTmin = 0.001f;  // 1mm
 	mGlobalConstants.accumulatedFrames = 0;
@@ -264,6 +283,8 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	const Array<float> cdfArr = scene->getCdfArray();
 	const Array<Material> mtlArr = scene->getMaterialArray();
 	const Array<StaticEmissiveTriangle> staticLightArr = scene->getStaticLightArray();				
+	const Array<float> probArr = scene->getProbArray();				
+	const Array<uint> aliasArr = scene->getAliasArray();
 
 	//assert(cdfArr.size() == 0 || cdfArr.size() == tdxArr.size());
 	if (cdfArr.size() != 0 && cdfArr.size() != tdxArr.size())
@@ -276,8 +297,11 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	uint64 mtlBuffSize = mtlArr.size() * sizeof(Material);
 	uint64 objBuffSize = numObjs * sizeof(GPUSceneObject);
 	uint64 staticLightBuffSize = staticLightArr.size() * sizeof(StaticEmissiveTriangle);
+	uint64 probBuffSize = probArr.size() * sizeof(float);
+	uint64 aliasBuffSize = aliasArr.size() * sizeof(uint);
 
-	UploadBuffer uploader(vtxBuffSize + tdxBuffSize + trmBuffSize + cdfBuffSize + mtlBuffSize + objBuffSize + staticLightBuffSize);
+
+	UploadBuffer uploader(vtxBuffSize + tdxBuffSize + trmBuffSize + cdfBuffSize + mtlBuffSize + objBuffSize + staticLightBuffSize + probBuffSize + aliasBuffSize);
 	uint64 uploaderOffset = 0;
 
 	auto initBuffer = [&](DefaultBuffer& buff, uint64 buffSize, void* srcData) {
@@ -295,6 +319,8 @@ void DXRPathTracer::setupScene(const Scene* scene)
 	initBuffer(mCdfBuffer,		 cdfBuffSize, (void*) cdfArr.data());
 	initBuffer(mMaterialBuffer,	 mtlBuffSize, (void*) mtlArr.data());
 	initBuffer(mStaticLightBuffer,	 staticLightBuffSize, (void*) staticLightArr.data());
+	initBuffer(mProbBuffer,	 probBuffSize, (void*) probArr.data());
+	initBuffer(mAliasBuffer,	 aliasBuffSize, (void*) aliasArr.data());
 
 	mSceneObjectBuffer.create(objBuffSize);
 	GPUSceneObject* copyDst = (GPUSceneObject*) ((uint8*) uploader.map() + uploaderOffset);
@@ -382,6 +408,24 @@ void DXRPathTracer::setupScene(const Scene* scene)
 		srvDesc.Buffer.NumElements = staticLightArr.size();
 	}
 	mSrvUavHeap[DescriptorID::staticLightBuff].assignSRV(mStaticLightBuffer, &srvDesc);
+
+	{
+		srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.StructureByteStride = 0;
+		srvDesc.Buffer.NumElements = probArr.size();
+	}
+	mSrvUavHeap[DescriptorID::probBuff].assignSRV(mProbBuffer, &srvDesc);
+
+	{
+		srvDesc.Format = DXGI_FORMAT_R32_UINT;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Buffer.StructureByteStride = 0;
+		srvDesc.Buffer.NumElements = aliasArr.size();
+	}
+	mSrvUavHeap[DescriptorID::aliasBuff].assignSRV(mAliasBuffer, &srvDesc);
 
 	mGlobalConstants.numEmissiveTriangles = cdfArr.size();
 

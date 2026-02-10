@@ -15,7 +15,6 @@ public:
 	Scene* getScene(uint sceneIdx) const { return sceneArr[sceneIdx]; }
 	Scene* push_testScene1();
 	Scene* push_testScene2();
-	Scene* push_testScene3();
+	Scene* push_RIStestScene();
 	Scene* push_hyperionTestScene();
-	Scene* push_hyperionTestScene2();
 };

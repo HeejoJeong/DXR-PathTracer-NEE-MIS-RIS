@@ -167,25 +167,16 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="DXRShader.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.3</ShaderModel>
-      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)bin\cso\%(Filename).cso</ObjectFileOutput>
-      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)bin\cso\%(Filename).cso</ObjectFileOutput>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </EntryPointName>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </EntryPointName>
-    </FxCompile>
+    <None Include="DXRShader_ris.hlsl">
+      <FileType>Document</FileType>
+    </None>
     <None Include="DXRShader_mis.hlsl">
       <FileType>Document</FileType>
     </None>
-    <None Include="DXRShader1.hlsl">
+    <None Include="DXRShader_nee.hlsl">
       <FileType>Document</FileType>
     </None>
-    <None Include="DXRShader_nee.hlsl">
+    <None Include="DXRShader.hlsl">
       <FileType>Document</FileType>
     </None>
   </ItemGroup>

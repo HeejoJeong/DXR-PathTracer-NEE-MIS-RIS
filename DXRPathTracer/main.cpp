@@ -18,6 +18,7 @@ uint width  = 1200;
 uint height = 900;
 bool minimized = false;
 
+
 int main()
 {
 	HWND hwnd = createWindow("Integrated GPU Path Tracer", width, height);
@@ -28,9 +29,10 @@ int main()
 	screen = new D3D12Screen(hwnd, width, height);
 
 	SceneLoader sceneLoader;
-	//Scene* scene = sceneLoader.push_testScene1();
-	//Scene* scene = sceneLoader.push_testScene2();
+
 	Scene* scene = sceneLoader.push_hyperionTestScene();
+	//Scene* scene = sceneLoader.push_RIStestScene();
+
 	tracer->setupScene(scene);
 	
 	double fps, old_fps = 0;
@@ -45,7 +47,10 @@ int main()
 			TracedResult trResult = tracer->shootRays();
 			screen->display(trResult);
 
-			exportIMG(cur_frame++, trResult);
+			//exportIMG(cur_frame++, trResult);
+			//if (cur_frame == 512 )
+			//	PostMessage(hwnd, WM_CLOSE, 0, 0);
+
 		}
 
 		MSG msg;
@@ -99,10 +104,12 @@ HWND createWindow(const char* winTitle, uint width, uint height)
 
 
 void exportIMG(uint frame, const TracedResult& trResult) {
+	printf("CURRENTFRAME: %d\n", frame);
+
 	if (frame != 512 - 1)
 		return;
 
-	printf("EXPORT at 512 frame, i.e. 16k spp \n");
+	printf("EXPORT at 512 frame \n");
 
 	struct float4 { float x, y, z, w; };
 
@@ -118,8 +125,6 @@ void exportIMG(uint frame, const TracedResult& trResult) {
 		{
 			uint idx = y * trResult.width + x;
 			const float4& p = pixels[idx];
-
-			//printf("%f, %f, %f, %f \n ", p.x, p.y, p.z, p.w);
 
 			if (!std::isfinite(p.x) ||
 				!std::isfinite(p.y) ||
@@ -212,6 +217,8 @@ void exportIMG(uint frame, const TracedResult& trResult) {
 	}
 
 	const char* filename = "res.png";
+	if (frame == 512 * 8 - 1 )
+		filename = "res2.png";
 
 	stbi_write_png(filename, width, height, 4, ldr.data(), width * 4);
 }

@@ -34,7 +34,6 @@ NextAlignedLine
 struct ObjectContants
 {
 	uint objectIdx;
-
 };
 
 static const uint xxx = sizeof(GloabalContants);
@@ -54,6 +53,11 @@ private:
 };
 
 
+enum PTType {
+	BruteForce = 0, NEE = 1, MIS = 2, RIS = 3
+};
+
+
 class Scene;
 class InputEngine;
 class DXRPathTracer : public IGRTTracer
@@ -61,6 +65,7 @@ class DXRPathTracer : public IGRTTracer
 	static const DXGI_FORMAT			tracerOutFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 	static const uint					recordSize = hitGroupRecordSize;
 
+	PTType								pathTracerType;
 	uint								mNumRayTypes;
 	
 	ID3D12Device5*						mDevice;
@@ -97,6 +102,9 @@ class DXRPathTracer : public IGRTTracer
 	DefaultBuffer						mTransformBuffer;	// Now not use.		t5
 	DefaultBuffer						mMaterialBuffer;	
 	DefaultBuffer						mStaticLightBuffer;	
+
+	DefaultBuffer						mProbBuffer;	// For alias method
+	DefaultBuffer						mAliasBuffer;		// For alias method
 
 	ShaderTable							mShaderTable;
 	void setupShaderTable();

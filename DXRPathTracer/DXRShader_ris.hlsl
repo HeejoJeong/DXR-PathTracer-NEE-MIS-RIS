@@ -35,7 +35,7 @@ struct GPUSceneObject
 	uint twoSided;
 	uint materialIdx;
 	uint backMaterialIdx;
-	//Material material;
+	//Material material;	
 	//float3 emittance;
 	row_major float4x4 modelMatrix;
 };
@@ -56,6 +56,7 @@ StructuredBuffer<StaticEmissiveTriangle> staticLightBuffer		: register(t6);
 
 Buffer<float> probBuffer										: register(t7);				// prob to use Alias
 Buffer<uint> aliasBuffer										: register(t8);
+
 
 cbuffer GLOBAL_CONSTANTS : register(b0)
 {
@@ -163,7 +164,7 @@ float3 tracePath(in float3 startPos, in float3 startDir, inout uint seed)
 	{
 		
 		TraceRay(scene, 0, ~0, 0, 2, 0, ray, prd);
-	
+
 		radiance += attenuation * prd.radiance;
 		attenuation *= prd.attenuation;
 
@@ -181,7 +182,7 @@ float3 tracePath(in float3 startPos, in float3 startDir, inout uint seed)
 }
 
 [shader("raygeneration")]
-void rayGen()
+void rayGen()	
 {
 	uint2 launchIdx = DispatchRaysIndex().xy;
 	uint2 launchDim = DispatchRaysDimensions().xy;
@@ -209,7 +210,7 @@ void rayGen()
 	tracerOutBuffer[bufferOffset] = float4(avrRadiance, 1.0f);
 }
 
-void samplingBRDF(out float3 sampleDir,out float sampleProb, out float3 brdfCos, 
+void samplingBRDF(out float3 sampleDir, out float sampleProb, out float3 brdfCos, 
 	in float3 surfaceNormal, in float3 baseDir, in uint materialIdx, inout uint seed)
 {
 	Material mtl = materialBuffer[materialIdx];
@@ -350,49 +351,6 @@ float3 evalBRDF(in float3 shadowRayDir, in float3 surfaceNormal, in float3 baseD
 	return brdfEval;
 }
 
-float evalSamplingProbability(in float3 dir, in float3 surfaceNormal, in float3 baseDir, in uint materialIdx) {
-	Material mtl = materialBuffer[materialIdx];
-
-	uint reflectType = mtl.type;
-
-	float3 I = dir, N = surfaceNormal;
-	float IN = dot(I, N);
-	if (reflectType == Lambertian)
-		return InvPi * IN;
-
-	float3 O = baseDir;
-	float3 H = normalize(I + O);
-
-	float ON = dot(O, N), HN = dot(N, H), OH = dot(O, H);
-
-	float alpha2 = mtl.roughness * mtl.roughness;
-
-	float sampleProb;
-
-	if (reflectType == Metal) {
-
-		if (IN < 0) {
-			sampleProb = 0.0f;
-		}
-		else{
-			float D = TrowbridgeReitz(HN * HN, alpha2);
-			sampleProb = D * HN / (4 * OH);
-		}
-	}
-	else if (reflectType == Plastic) {
-		float r = mtl.reflectivity;
-
-		if (IN < 0)
-			sampleProb = 0.0f;
-		else {
-			float D = TrowbridgeReitz(HN * HN, alpha2);
-			sampleProb = r * D * HN / (4 * OH) + (1-r) * InvPi * IN;
-		}
-	}
-
-	return sampleProb;
-}
-
 void selectLight_binarySearch(out uint cidx, out float lightSelectionProb, inout float xi) {
 
 	GPUSceneObject obj = objectBuffer[objIdx];
@@ -435,13 +393,13 @@ void selectLight_binarySearch(out uint cidx, out float lightSelectionProb, inout
 
 		if (u >= cdfPrevExcluded)
 			u += rangeExcluded;
-		
+
 		//if (u < cdfPrev)
 		//	u = u;
 		//else
 		//	u = u + wExcluded;
 
-		while (left < right){
+		while (left < right) {
 			uint mid = (left + right) >> 1;
 
 			if (u <= cdfBuff[mid])
@@ -461,53 +419,48 @@ void selectLight_binarySearch(out uint cidx, out float lightSelectionProb, inout
 	return;
 }
 
-void selectLight(out uint cidx, out float lightSelectionProb, inout RayPayload payload) {//Alias method
+
+void selectLight(out uint cidx, out float lightSelectionProb, inout RayPayload payload) {
+	//Alias Method
 
 	GPUSceneObject obj = objectBuffer[objIdx];
 
 	uint numEle = numEmissiveTriangles;
+	float totalPower = cdfBuff[numEle - 1];
 
 	if (obj.cdfOffset == uint(-1)) {							// The shadow ray starts from non-emissive surface.
-		float totalPower = cdfBuff[numEle - 1];
 
 		uint col = uint(rnd(payload.seed) * numEle);
 
 		if (rnd(payload.seed) >= probBuffer[col])
 			col = aliasBuffer[col];
 
-		float cdfPrev = (col == 0) ? 0.0f : cdfBuff[col - 1];
-		float range = cdfBuff[col] - cdfPrev;
+		float range = (col > 0) ? cdfBuff[col] - cdfBuff[col - 1] : cdfBuff[col];
 		lightSelectionProb = range / totalPower;
-
 		cidx = col;
 	}
 	else {														// The shadow ray starts from emissive surface.
 		uint excluded = obj.cdfOffset + PrimitiveIndex();
 
-		float cdfPrevExcluded = (excluded > 0) ? cdfBuff[excluded - 1] : 0.0f;
-		float rangeExcluded = cdfBuff[excluded] - cdfPrevExcluded;
-		float totalPower = cdfBuff[numEle - 1] - rangeExcluded;
-
+		float rangeExcluded = (excluded > 0) ? cdfBuff[excluded] - cdfBuff[excluded - 1] : cdfBuff[excluded];
+		totalPower -= rangeExcluded;
+		
 		uint col = 0;
-		do {														// rejection
-			col = uint(rnd(payload.seed) * numEle);
+		do{														// rejection
+			col = uint(rnd(payload.seed) * numEle) ;
 			if (rnd(payload.seed) >= probBuffer[col])
 				col = aliasBuffer[col];
-		} while (col == excluded);
+		} while (col == excluded);								
 
-		float cdfPrev = (col == 0) ? 0.0f : cdfBuff[col - 1];
-		float range = cdfBuff[col] - cdfPrev;
+		float range = (col > 0) ? cdfBuff[col] - cdfBuff[col - 1] : cdfBuff[col];
 		lightSelectionProb = range / totalPower;
-
 		cidx = col;
 	}
 
 	return;
 }
 
-
 void sampleLightPoint(out float3 samplePoint, out float3 lightNormal, in float xi1, in float xi2, in StaticEmissiveTriangle light) {
-
 
 	GPUSceneObject obj = objectBuffer[light.objIdx];
 	uint vtxOffset = obj.vertexOffset;
@@ -516,15 +469,13 @@ void sampleLightPoint(out float3 samplePoint, out float3 lightNormal, in float x
 
 	uint3 tridex = tridexBuffer[tdxOffset + tdxLocal];
 
-	Vertex vtx0 = vertexBuffer[vtxOffset + tridex.x];
-	Vertex vtx1 = vertexBuffer[vtxOffset + tridex.y];
-	Vertex vtx2 = vertexBuffer[vtxOffset + tridex.z];
-
 	float xi1sqrt = sqrt(xi1);
 
 	float b0 = 1.0f - xi1sqrt, b1 = xi1sqrt * (1.0f - xi2), b2 = xi1sqrt * xi2;
 
-	float3 p0 = vtx0.position, p1 = vtx1.position, p2 = vtx2.position;
+	float3 p0 = vertexBuffer[vtxOffset + tridex.x].position;
+	float3 p1 = vertexBuffer[vtxOffset + tridex.y].position;
+	float3 p2 = vertexBuffer[vtxOffset + tridex.z].position;
 
 	float3 wp0 = mul(obj.modelMatrix, float4(p0, 1.0)).xyz;
 	float3 wp1 = mul(obj.modelMatrix, float4(p1, 1.0)).xyz;
@@ -535,35 +486,107 @@ void sampleLightPoint(out float3 samplePoint, out float3 lightNormal, in float x
 
 }
 
-void evalDirectLight(out float3 mis_radiance_dir, in float3 surfaceNormal, in float3 baseDir, in uint materialIdx, inout RayPayload payload){
-	float xi1 = rnd(payload.seed), xi2 = rnd(payload.seed);
+float3 evalDirectLight(in float3 surfaceNormal, in float3 baseDir, in uint materialIdx, inout RayPayload payload)
+{
+	// This Code is not used because:
+	// Keeping large local arrays in DXR hit shaders causes severe register pressure
+	// and local memory spill, leading to drastic performance degradation.
+	// But it remains to show how to use SIR.
 
-	uint cidx;
-	float lightSelectionProb;
-	selectLight(cidx, lightSelectionProb, payload);
-	//selectLight_binarySearch(cidx, lightSelectionProb, xi1);
+	static const uint numProposals = 10;
+	//static const uint numSample = 1;
+
+	float3 proposals[numProposals];
+	float3 proposal_normals[numProposals];
+	uint proposal_cidx[numProposals];
+	float q_hat_arr[numProposals];
+	float  w_cdf[numProposals];
+
+	float3 shadowRayOrigin = payload.hitPos;
+
+	for (uint i = 0; i < numProposals; i++) {
+
+		uint cidx;
+		float lightSelectionProb;
+
+		selectLight(cidx, lightSelectionProb, payload);
+		//selectLight_binarySearch(cidx, lightSelectionProb, xi1);
+
+		StaticEmissiveTriangle light = staticLightBuffer[cidx];
+		float3 Le = light.emittance;
+
+		float xi1 = rnd(payload.seed), xi2 = rnd(payload.seed);
+
+		float3 proposal, lightNormal;
+		sampleLightPoint(proposal, lightNormal, xi1, xi2, light);
+
+		proposals[i] = proposal;
+		proposal_normals[i] = lightNormal;
+		proposal_cidx[i] = cidx;
+
+		float p = lightSelectionProb / light.area;
+
+		float3 shadowRayDir = normalize(proposal - shadowRayOrigin);
+
+		float dist = distance(proposal, shadowRayOrigin);
+
+		float cos1 = dot(surfaceNormal, shadowRayDir);
+		float cos2 = dot(lightNormal, -shadowRayDir);
+
+		float G = cos1 * cos2 / (dist * dist);
+
+		if (cos1 <= 0.0f || cos2 <= 0.0f)
+			G = 0.0f;
+
+		float3 brdf = evalBRDF(shadowRayDir, surfaceNormal, baseDir, materialIdx);
+
+		float3 q_vec = brdf * Le * G;
+
+		float q_hat = dot(q_vec, float3(0.2126, 0.7152, 0.0722));
+
+		float weight = q_hat / p;
+
+		w_cdf[i] = (i > 0) ? w_cdf[i - 1] + weight : weight;
+		q_hat_arr[i] = q_hat;
+	}
+
+	float sum_weights = w_cdf[numProposals - 1];
+
+	if (sum_weights <= 0)
+		return 0.0f;
+
+	for (uint i = 0; i < numProposals; i++)
+		w_cdf[i] /= sum_weights;
+
+	// DO Sampling IR.
+	float xi = rnd(payload.seed);
+	uint left = 0;
+	uint right = numProposals - 1;
+
+	while (left < right) {
+		uint middle = (left + right) >> 1;
+		if (xi <= w_cdf[middle])
+			right = middle;
+		else
+			left = middle + 1;
+	}
+	uint sidx = left;
+
+	float3 lightPoint = proposals[sidx];
+	float3 lightNormal = proposal_normals[sidx];
+	uint cidx = proposal_cidx[sidx];
+	float q_hat = q_hat_arr[sidx];
 
 	StaticEmissiveTriangle light = staticLightBuffer[cidx];
 	float3 Le = light.emittance;
 
-	float3 lightPoint,lightNormal;
-	sampleLightPoint(lightPoint, lightNormal, xi1, xi2, light);
-
-	// NOTE: In NEE, lightNormal must be the geometric normal.
-	// The cos term (dot(n_L, -wi)) is part of the area -> solid-angle Jacobian,
-	// so it must be defined w.r.t. the geometric surface, not the shading normal.
-
-	float3 shadowRayOrigin = payload.hitPos;
 	float3 shadowRayDir = normalize(lightPoint - shadowRayOrigin);
 
 	float cos1 = dot(surfaceNormal, shadowRayDir);
 	float cos2 = dot(lightNormal, -shadowRayDir);
 
-
-	if (cos1 <= 0.0f || cos2 <= 0.0f) {
-		mis_radiance_dir = float3(0.0f, 0.0f, 0.0f);
-		return;
-	}
+	if (cos1 <= 0.0f || cos2 <= 0.0f)
+		return 0.0f;
 
 	float dist = distance(lightPoint, shadowRayOrigin);
 	float tmax = dist - rayTmin;
@@ -572,25 +595,100 @@ void evalDirectLight(out float3 mis_radiance_dir, in float3 surfaceNormal, in fl
 	RayDesc sray = Ray(shadowRayOrigin, shadowRayDir, rayTmin, tmax);
 	TraceRay(scene, 0, ~0, 1, 2, 1, sray, sprd);
 
+	if (sprd.occluded)
+		return 0.0f;
 
 	float3 brdf = evalBRDF(shadowRayDir, surfaceNormal, baseDir, materialIdx);
 
-	float areaSampleProb = lightSelectionProb / light.area;
+	float G = cos1 * cos2 / (dist * dist);
 
-
-	if (sprd.occluded) {
-		mis_radiance_dir = float3(0.0f, 0.0f, 0.0f);
-	}
-	else{
-
-		float p_light_lightSample = (dist * dist * areaSampleProb) / cos2 ;
-		float p_brdf_lightSample = evalSamplingProbability(shadowRayDir, surfaceNormal, baseDir, materialIdx);
-		float powerHeuristic = p_light_lightSample * p_light_lightSample / (p_light_lightSample * p_light_lightSample + p_brdf_lightSample * p_brdf_lightSample);
-		mis_radiance_dir = powerHeuristic * brdf * Le * cos1 * cos2 / (dist * dist * areaSampleProb);	// visibility = 1;
-	}
-
+	return brdf * Le * G / q_hat * sum_weights / numProposals;
 }
 
+float3 evalDirectLight_streaming(in float3 surfaceNormal, in float3 baseDir, in uint materialIdx, inout RayPayload payload)
+{
+	static const uint numProposals = 32;
+	//static const uint numSample = 1;
+
+	float sum_w = 0.0f;
+
+	float3 samplePos;
+	float3 contrib_sample;
+
+	bool hasSample = false;
+
+	float3 shadowRayOrigin = payload.hitPos;
+
+	for (uint i = 0; i < numProposals; i++) {
+
+		uint cidx;
+		float lightSelectionProb;
+
+		selectLight(cidx, lightSelectionProb, payload);
+		//selectLight_binarySearch(cidx, lightSelectionProb, xi1);
+
+		StaticEmissiveTriangle light = staticLightBuffer[cidx];
+		float3 Le = light.emittance;
+		float lightArea = light.area;
+
+		float xi1 = rnd(payload.seed), xi2 = rnd(payload.seed);
+
+		float3 proposal, proposalNormal;
+		//sampleLightPoint(proposal, proposalNormal, xi1, xi2, light);
+		sampleLightPoint(proposal, proposalNormal, xi1, xi2, light);
+
+		float p = lightSelectionProb / lightArea;
+
+		float3 shadowRayDir = normalize(proposal - shadowRayOrigin);
+
+		float dist = distance(proposal, shadowRayOrigin);
+		float cos1 = dot(surfaceNormal, shadowRayDir);
+		float cos2 = dot(proposalNormal, -shadowRayDir);
+
+		if (cos1 <= 0.0f || cos2 <= 0.0f)
+			continue;						//G = 0.0f;
+
+		float G = cos1 * cos2 / (dist * dist);
+
+		float3 brdf = evalBRDF(shadowRayDir, surfaceNormal, baseDir, materialIdx);
+
+		//Material mtl = materialBuffer[materialIdx];
+		//float3 brdf = mtl.albedo;
+
+		float3 q_vec = brdf * Le * G;		// integrand without visibility.
+
+		float q_hat = dot(q_vec, float3(0.2126, 0.7152, 0.0722));
+
+		if (q_hat <= 0.0f)
+			continue;
+
+		float weight = q_hat / p;
+		sum_w += weight;
+
+		if (rnd(payload.seed) < (weight / sum_w)) {
+			samplePos = proposal;
+			contrib_sample = q_vec / q_hat;
+			hasSample = true;
+		}
+	}
+
+	if (!hasSample || sum_w <= 0)
+		return 0.0f;
+
+	float3 shadowRayDir = normalize(samplePos - shadowRayOrigin);
+
+	float dist = distance(samplePos, shadowRayOrigin);
+	float tmax = dist - rayTmin;
+
+	ShadowPayload sprd;
+	RayDesc sray = Ray(shadowRayOrigin, shadowRayDir, rayTmin, tmax);
+	TraceRay(scene, 0, ~0, 1, 2, 1, sray, sprd);
+
+	if (sprd.occluded)
+		return 0.0f;
+
+	return contrib_sample * sum_w / numProposals;
+}
 
 /*
 1. Closed manifold assumption(except for emitting source): we can only consider the shading normal N, 
@@ -613,10 +711,6 @@ void closestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttribut
 
 	payload.radiance = 0.0f;
 	payload.attenuation = 1.0f;
-
-	float3 hitPos_prev;
-	if (payload.rayDepth > 0)
-		hitPos_prev = payload.hitPos;
 	payload.hitPos = WorldRayOrigin() - RayTCurrent() * E;
 
 	uint mtlIdx = obj.materialIdx;
@@ -635,54 +729,30 @@ void closestHit(inout RayPayload payload, in BuiltInTriangleIntersectionAttribut
 		return;
 	}
 	
-
 	Material mtl = materialBuffer[mtlIdx];
 
-	if (any(mtl.emittance) && (payload.rayDepth == 0 || payload.prevBrdfProb < 0))
+	if (any(mtl.emittance) && (payload.rayDepth == 0 || payload.prevBrdfProb < 0.0f) )
 	{
 		// primary ray hit or or hit reached via a delta BSDF (i.e. Glass Material)
 		payload.radiance += mtl.emittance;
 	}
-	else if (any(mtl.emittance) && payload.rayDepth > 0 && payload.prevBrdfProb >=0 && EfN > 0) {
-
-		// payload.rayDepth > 0 : emission term deferred for MIS
-		// payload.prevBrdfProb >=0 : valid BRDF pdf (not perfect specular / transmission)
-
-		uint lightIdx = obj.cdfOffset + PrimitiveIndex();
-
-		StaticEmissiveTriangle light = staticLightBuffer[lightIdx];
-
-		float selectLightProb = (lightIdx > 0) ? cdfBuff[lightIdx] - cdfBuff[lightIdx - 1] : cdfBuff[lightIdx]; //Currently, cdfBuff is not normalized
-		selectLightProb /= cdfBuff[numEmissiveTriangles - 1];		
-		float areaSampleProb = selectLightProb / light.area;
-
-		float dist = distance(hitPos_prev, payload.hitPos);
-
-		float sampleProb_Light = areaSampleProb * dist * dist / EfN;
-
-		float sampleProb_brdf = payload.prevBrdfProb;
-		float powerHeuristic = sampleProb_brdf * sampleProb_brdf / (sampleProb_brdf * sampleProb_brdf + sampleProb_Light * sampleProb_Light);
-		
-		payload.radiance += powerHeuristic * mtl.emittance;
-	}
-
 	if (payload.rayDepth < maxPathLength - 1) {		//path end
 
 		float3 sampleDir, brdfCos;
-		float p_brdf_brdfSample;
-		samplingBRDF(sampleDir, p_brdf_brdfSample, brdfCos, N, E, mtlIdx, payload.seed);
-	
-		if(dot(sampleDir, N) <= 0)
+		float sampleProb;
+		samplingBRDF(sampleDir, sampleProb, brdfCos, N, E, mtlIdx, payload.seed);
+
+		if (dot(sampleDir, N) <= 0)
 			payload.rayDepth = maxPathLength;
 		//payload.terminateRay = dot(sampleDir, N) <= 0.0f
-		payload.attenuation = brdfCos / p_brdf_brdfSample;
+		payload.attenuation = brdfCos / sampleProb;
 		payload.bounceDir = sampleDir;
-		payload.prevBrdfProb = p_brdf_brdfSample;
+		payload.prevBrdfProb = sampleProb;
 
-		float3 radiance_directLight;
-		float p_light_brdfSample;
-		evalDirectLight(radiance_directLight, N, E, mtlIdx, payload);				
-		payload.radiance += radiance_directLight;
+		//payload.radiance += evalDirectLight(N, E, mtlIdx, payload);
+		payload.radiance += evalDirectLight_streaming(N, E, mtlIdx, payload);
+
+		
 	}
 }
 
@@ -697,10 +767,6 @@ void closestHitGlass(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
 
 	payload.radiance = 0.0f;
 	payload.attenuation = 1.0f;
-
-	float3 hitPos_prev;
-	if (payload.rayDepth > 0)
-		hitPos_prev = payload.hitPos;
 	payload.hitPos = WorldRayOrigin() - RayTCurrent() * E;
 
 	if(EN * EfN < 0)
@@ -785,7 +851,7 @@ void closestHitGlass(inout RayPayload payload, in BuiltInTriangleIntersectionAtt
 	payload.attenuation = Fresnel / sampleProb;
 	payload.bounceDir = sampleDir;
 
-	payload.prevBrdfProb = -1.0f;	// Dirac-delta distribution.
+	payload.prevBrdfProb = -1.0f;
 }
 
 [shader("closesthit")]

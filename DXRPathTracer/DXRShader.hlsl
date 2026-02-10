@@ -25,12 +25,15 @@ struct Material
 	float transmittivity;
 };
 
+// The only change between DXRShader.hlsl and DXRShader1.hlsl is that float objectArea is deleted and cdfOffset is created.
+// But this change doesn't affects b/c cdfOffset, numtridicess, and objectArea are not used.
 struct GPUSceneObject
 {
 	uint vertexOffset;
 	uint tridexOffset;
-	uint numTridices;
-	float objectArea;
+	uint cdfOffset;									
+	uint numTridices;		
+	// float objectArea
 	uint twoSided;
 	uint materialIdx;
 	uint backMaterialIdx;
