@@ -241,7 +241,7 @@ Scene* SceneLoader::push_RIStestScene()
 	enum SceneObjectId { ground1, ground2, numObjs };
 	enum MaterialId { groundMtl1, groundMtl2, numMtls };
 
-	uint num_spheres = 50000;
+	uint num_spheres = 30000;
 	uint num_lights = 300;
 
 	auto wanghash = [](uint& seed) -> uint {

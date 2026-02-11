@@ -104,7 +104,6 @@ HWND createWindow(const char* winTitle, uint width, uint height)
 
 
 void exportIMG(uint frame, const TracedResult& trResult) {
-	printf("CURRENTFRAME: %d\n", frame);
 
 	if (frame != 512 - 1)
 		return;

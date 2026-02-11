@@ -116,7 +116,7 @@ void DXRPathTracer::declareRootSignatures()
 
 void DXRPathTracer::buildRaytracingPipeline()
 {
-	uint PTType = 2;
+	uint PTType = 0;
 
 	if(!PTType){
 		dxrLib.load(L"DXRShader.cso");
@@ -152,7 +152,6 @@ void DXRPathTracer::buildRaytracingPipeline()
 		mRtPipeline.setMaxRayDepth(2);
 		mRtPipeline.build();
 	}
-
 }
 
 void DXRPathTracer::initializeApplication()
@@ -160,15 +159,15 @@ void DXRPathTracer::initializeApplication()
 	camera.setFovY(60.0f);
 	camera.setScreenSize((float) tracerOutW, (float) tracerOutH);
 	//camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 10.0f, 0.0f, 0.0f);
-	camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 6.0f, 0.0f, 0.4);
+	//camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 6.0f, 0.0f, 0.4);
 
-	//camera.initOrbit(float3(0.0f, 0.0f, 15.0f), 10.0f, 0.0f, 0.0f);
+	camera.initOrbit(float3(0.0f, 0.0f, 15.0f), 10.0f, 0.0f, 0.0f);
 
 
 	mGlobalConstants.rayTmin = 0.001f;  // 1mm
 	mGlobalConstants.accumulatedFrames = 0;
 	mGlobalConstants.numSamplesPerFrame = 32;
-	mGlobalConstants.maxPathLength = 5;
+	mGlobalConstants.maxPathLength = 3;
 	mGlobalConstants.backgroundLight = float3(.0f);
 
 	mGlobalConstantsBuffer.create(sizeof(GloabalContants));
