@@ -116,7 +116,7 @@ void DXRPathTracer::declareRootSignatures()
 
 void DXRPathTracer::buildRaytracingPipeline()
 {
-	uint PTType = 0;
+	uint PTType = 2;
 
 	if(!PTType){
 		dxrLib.load(L"DXRShader.cso");
@@ -159,9 +159,9 @@ void DXRPathTracer::initializeApplication()
 	camera.setFovY(60.0f);
 	camera.setScreenSize((float) tracerOutW, (float) tracerOutH);
 	//camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 10.0f, 0.0f, 0.0f);
-	//camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 6.0f, 0.0f, 0.4);
+	camera.initOrbit(float3(0.0f, 1.5f, 0.0f), 6.0f, 0.0f, 0.4);
 
-	camera.initOrbit(float3(0.0f, 0.0f, 15.0f), 10.0f, 0.0f, 0.0f);
+	//camera.initOrbit(float3(0.0f, 0.0f, 15.0f), 10.0f, 0.0f, 0.0f);
 
 
 	mGlobalConstants.rayTmin = 0.001f;  // 1mm
